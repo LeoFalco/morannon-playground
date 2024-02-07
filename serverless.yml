@@ -1,0 +1,57 @@
+service: morannon-cognito-triggers
+frameworkVersion: '3'
+configValidationMode: error
+
+package:
+  exclude:
+    - package.json
+    - README.md
+
+plugins:
+  - serverless-plugin-include-dependencies
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  logRetentionInDays: 3
+  memorySize: 128
+  versionFunctions: false
+  environment: ${file(env.json):${self:provider.stage}}
+
+functions:
+  CustomMessages:
+    handler: src/handlers/custom-messages/index.handler
+
+resources:
+  Resources:
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${self:provider.stage}
+        AutoVerifiedAttributes:
+          - email
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+            RequireUppercase: true
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+          - Name: name
+            Required: true
+            Mutable: true
+        LambdaConfig:
+          CustomMessage: !GetAtt CustomMessagesLambdaFunction.Arn
+    MyLambdaInvocationPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !GetAtt CustomMessagesLambdaFunction.Arn
+        Principal: cognito-idp.amazonaws.com
+        SourceArn: !GetAtt UserPool.Arn
